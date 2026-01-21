@@ -1,20 +1,57 @@
-import { useState } from 'react';
-import './index.css';
+import { useState, useEffect } from 'react';
+import { io, Socket } from 'socket.io-client';
+import DownloadProgress from './DownloadProgress';
+import './App.css';
 
 // We will implement components in separate files next, 
 // but for the first pass let's setup the structure here to verify 
 // and then refactor or just create them directly.
 // actually, let's just make the main container relative.
 
+interface VideoInfo {
+  title: string;
+  thumbnail: string;
+  duration_string: string;
+  uploader: string;
+  age_limit: number;
+  formats: any[];
+}
+
 function App() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
-  const [videoInfo, setVideoInfo] = useState<any>(null);
+  const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
 
   const [cookies, setCookies] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedQuality, setSelectedQuality] = useState('best');
   const [availableQualities, setAvailableQualities] = useState<number[]>([]);
+
+  // Progress State
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  useEffect(() => {
+    const newSocket = io('http://localhost:3001');
+    setSocket(newSocket);
+
+    newSocket.on('connect', () => {
+      console.log('Connected to socket server:', newSocket.id);
+    });
+
+    newSocket.on('progress', (percent: number) => {
+      setProgress(percent);
+      if (percent >= 100) {
+        // Keep showing 100% for a moment then reset
+        setTimeout(() => setIsDownloading(false), 5000);
+      }
+    });
+
+    return () => {
+      newSocket.close();
+    };
+  }, []);
 
   const fetchInfo = async () => {
     if (!url) return;
@@ -54,6 +91,9 @@ function App() {
   };
 
   const handleDownload = () => {
+    setIsDownloading(true);
+    setProgress(0);
+
     let formatId = 'bestvideo+bestaudio/best';
 
     if (selectedQuality === 'audio') {
@@ -93,6 +133,14 @@ function App() {
       cookiesInput.name = 'cookies';
       cookiesInput.value = cookies;
       form.appendChild(cookiesInput);
+    }
+
+    if (socket && socket.id) {
+      const socketIdInput = document.createElement('input');
+      socketIdInput.type = 'hidden';
+      socketIdInput.name = 'socketId';
+      socketIdInput.value = socket.id;
+      form.appendChild(socketIdInput);
     }
 
     document.body.appendChild(form);
@@ -176,6 +224,8 @@ function App() {
                 </button>
               </div>
             </div>
+
+            <DownloadProgress progress={progress} isDownloading={isDownloading} />
 
             {/* 18+ Warning */}
             {videoInfo.age_limit > 0 && (

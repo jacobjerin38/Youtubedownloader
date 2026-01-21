@@ -24,7 +24,7 @@ export const getVideoInfo = async (url: string, cookiesPath?: string) => {
 };
 
 // Helper to download video to a local file
-export const downloadVideo = (url: string, outputPath: string, formatId?: string, cookiesPath?: string) => {
+export const downloadVideo = (url: string, outputPath: string, formatId?: string, cookiesPath?: string, onProgress?: (percent: number) => void) => {
     console.log('FFmpeg Path:', ffmpegPath);
 
     const targetFormat = (formatId === 'best' || !formatId) ? 'bestvideo+bestaudio/best' : formatId;
@@ -48,7 +48,18 @@ export const downloadVideo = (url: string, outputPath: string, formatId?: string
     const subprocess = ytDlpExec(url, args);
 
     // Attach listeners to debug output
-    subprocess.stdout?.on('data', (d) => console.log(d.toString()));
+    subprocess.stdout?.on('data', (d) => {
+        const line = d.toString();
+        console.log(line); // Keep logging
+
+        // Parse progress: [download]  45.3% of ...
+        const match = line.match(/\[download\]\s+(\d+\.\d+)%/);
+        if (match && match[1] && onProgress) {
+            const percent = parseFloat(match[1]);
+            onProgress(percent);
+        }
+    });
+
     subprocess.stderr?.on('data', (d) => console.error(d.toString()));
 
     return subprocess;

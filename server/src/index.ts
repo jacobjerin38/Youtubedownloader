@@ -58,7 +58,7 @@ app.post('/info', async (req, res) => {
 // Trigger Download (File buffer response)
 app.post('/download', async (req, res) => {
     // req.body for POST
-    const { url, format_id, title, cookies } = req.body;
+    const { url, format_id, title, cookies, socketId } = req.body;
 
     if (!url || typeof url !== 'string') {
         res.status(400).send('Missing URL');
@@ -87,8 +87,16 @@ app.post('/download', async (req, res) => {
 
     try {
         console.log(`Starting download for: ${url} to ${filePath}`);
+
+        const onProgress = (percent: number) => {
+            if (socketId) {
+                io.to(socketId).emit('progress', percent);
+            }
+        };
+
         // This might take a while, in a real app better to use jobs/sockets
-        await downloadVideo(url, filePath, format_id as string, cookiesPath);
+        await downloadVideo(url, filePath, format_id as string, cookiesPath, onProgress);
+
         console.log('Download complete.');
 
         if (fs.existsSync(filePath)) {
@@ -145,7 +153,15 @@ app.post('/download', async (req, res) => {
 
     } catch (error: any) {
         console.error('Download failed:', error);
-        res.status(500).send('Download failed: ' + (error.message || error));
+
+        const errorMessage = error.message || String(error);
+
+        if (errorMessage.includes('Sign in to confirm your age')) {
+            res.status(403).send('Download failed: 18+ Age-Restricted Content. Please paste valid Netscape-formatted cookies in "Show Advanced Options" and try again.');
+        } else {
+            res.status(500).send('Download failed: ' + errorMessage);
+        }
+
         // Cleanup
         try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
         try { if (cookiesPath && fs.existsSync(cookiesPath)) fs.unlinkSync(cookiesPath); } catch (e) { /* ignore */ }
@@ -153,9 +169,9 @@ app.post('/download', async (req, res) => {
 });
 
 io.on('connection', (socket) => {
-    console.log('Client connected');
+    console.log('Client connected', socket.id);
     socket.on('disconnect', () => {
-        console.log('Client disconnected');
+        console.log('Client disconnected', socket.id);
     });
 });
 

@@ -1,0 +1,19 @@
+
+{
+  "manifest_version": 3,
+  "name": "YouTube Downloader Premium",
+  "version": "1.0.0",
+  "action": {
+    "default_popup": "index.html"
+  },
+  "permissions": [
+    "activeTab",
+    "cookies",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "http://localhost:3001/*"
+  ]
+}
